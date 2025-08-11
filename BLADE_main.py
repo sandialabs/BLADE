@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-BLADE Main Script (version 1.0)
+BLADE Main Script (version 1.1)
 
 This script implements the BLADE (Bolide Light-curve Analysis and Discrimination Explorer)
 framework for automated processing and classification of digitized CNEOS fireball light curves.
@@ -189,11 +189,11 @@ def process_light_curve(file_path: str, metadata: pd.DataFrame) -> tuple:
             hour=int(hhmmss[:2]), minute=int(hhmmss[2:4]), second=int(hhmmss[4:])
         )
 
-        folder_name = f"{year}{day}{month}_{hhmmss}"
+        folder_name = f"{year}{month}{day}_{hhmmss}"
         event_folder = os.path.join(OUTPUT_FOLDER, folder_name)
         os.makedirs(event_folder, exist_ok=True)
 
-        # Match metadata row within �TIME_TOLERANCE seconds
+        # Match metadata row within TIME_TOLERANCE seconds
         matched_row = None
         if metadata is not None and not metadata.empty:
             start_window = event_time - timedelta(seconds=TIME_TOLERANCE)
