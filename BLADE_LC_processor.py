@@ -20,6 +20,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
+from scipy.signal import savgol_filter
 
 # Optional: import cartopy for map visualization (if installed)
 try:
@@ -29,6 +30,30 @@ try:
 except ImportError:
     cartopy_installed = False
     print("Cartopy not installed. Trajectory map will not include a geographical map.")
+
+
+def _smooth_intensities(intensities):
+    """Adaptive Savitzky-Golay smoothing, matching BLADE_main.py.
+
+    The window length is chosen from the noise level so the smoothed peak used to
+    anchor the altitude conversion is the same peak BLADE_main.py uses, rather
+    than a raw sample that may be a noise spike.
+    """
+    noise_level = np.std(np.diff(intensities, prepend=intensities[0]))
+    if noise_level > 1.0:
+        window_length, polyorder = 15, 2
+    elif noise_level > 0.5:
+        window_length, polyorder = 21, 3
+    else:
+        window_length, polyorder = 31, 3
+    window_length = min(window_length, len(intensities) - 1)
+    if window_length % 2 == 0:
+        window_length -= 1
+    if window_length < 3:
+        window_length = 3
+    if len(intensities) > window_length:
+        return savgol_filter(intensities, window_length=window_length, polyorder=polyorder)
+    return intensities.copy()
 
 # ------------------------------
 # PATH CONFIGURATION
@@ -107,8 +132,8 @@ def analyze_light_curve_event(file_path, metadata, time_tolerance=5):
         print("Invalid date/time in filename '{}'.".format(file_name))
         return False, file_name, "invalid filename"
 
-    # Create subfolder name: "yyyyddmm_hhmmss"
-    folder_name = "{}{}{}_{}".format(year, day, month, hhmmss)
+    # Create subfolder name: "yyyymmdd_hhmmss"
+    folder_name = "{}{}{}_{}".format(year, month, day, hhmmss)
     folder_path = os.path.join(output_folder, folder_name)
     os.makedirs(folder_path, exist_ok=True)
 
@@ -178,8 +203,11 @@ def analyze_light_curve_event(file_path, metadata, time_tolerance=5):
     times = light_curve_data["Time [s]"].values
     intensities = light_curve_data["Intensity [W/sr]"].values
 
-    # Compute altitudes (m -> km)
-    peak_idx = np.argmax(intensities)
+    # Compute altitudes (m -> km). Anchor the reference to the peak of the
+    # smoothed light curve, matching BLADE_main.py, so both scripts use the same
+    # peak-brightness time.
+    smoothed = _smooth_intensities(intensities)
+    peak_idx = np.argmax(smoothed)
     times_shifted = times - times[peak_idx]
     altitudes_m = peak_altitude_m - velocity_m_s * times_shifted * np.sin(np.radians(entry_angle))
     altitudes_km = altitudes_m / 1000.0
